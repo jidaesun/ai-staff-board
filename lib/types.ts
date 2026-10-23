@@ -1,13 +1,47 @@
-export type EmployeeStatus = "working" | "idle" | "offline" | "error";
+export type TaskStatus =
+  | "queued"
+  | "analyzing"
+  | "topic"
+  | "research"
+  | "writing"
+  | "pop"
+  | "review"
+  | "done"
+  | "error"
+  | "canceled";
 
-export interface AiEmployee {
+// Supabase 테이블 행. 컬럼 이름은 lib/data.ts 의 조회 코드와 함께 관리합니다.
+export interface AgentRow {
   id: string;
   name: string;
-  role: string;
-  avatar: string;
-  status: EmployeeStatus;
-  current_task: string | null;
-  tasks_completed: number;
-  success_rate: number;
-  last_active_at: string;
+  [key: string]: unknown;
+}
+
+export interface TaskRow {
+  id: string;
+  agent_id: string;
+  status: string;
+  title?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface TaskStepRow {
+  id: string;
+  task_id: string;
+  status?: string | null;
+  name?: string | null;
+  created_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface OutputRow {
+  id: string;
+  task_id: string;
+  type?: string | null;
+  content?: string | null;
+  url?: string | null;
+  created_at?: string | null;
+  [key: string]: unknown;
 }

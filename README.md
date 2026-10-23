@@ -1,54 +1,60 @@
 # AI 직원 현황판
 
-Next.js(App Router)와 Supabase로 만든 AI 직원 상태 대시보드입니다.
+Next.js(App Router)와 Supabase로 만든 AI 직원 작업 현황판입니다.
 
-- AI 직원 5명의 카드: 상태, 현재 작업, 완료 작업 수, 성공률, 마지막 활동 시각
-- 상태 요약: 업무 중, 대기, 오류, 오프라인 인원 수
-- 반응형 레이아웃: 화면 너비에 따라 1열, 2열, 3열, 5열
-- 다크 모드: 라이트, 다크, 시스템 중 선택하며 선택값은 저장됨 (`next-themes`)
-- Supabase Realtime: 테이블이 바뀌면 새로고침 없이 카드에 반영됨
+- AI 직원 5명 고정: 대형가전 AI, 생활가전 AI, 주방가전 AI, PC AI, 모바일 AI
+- 상단 집계: 전체, 작업 중, 완료, 대기 중, 오류
+- 카드를 누르면 상세 화면(`/agents/[slug]`)에서 작업 목록, 단계 목록, 결과물을 볼 수 있음
+- 반응형 레이아웃, 라이트/다크/시스템 테마
+- Supabase Realtime: 테이블이 바뀌면 화면을 자동으로 다시 불러옴
 
 ## 시작하기
 
 ```bash
+cp .env.example .env.local   # Supabase URL, anon key 입력
 npm install
 npm run dev
 ```
 
-http://localhost:3000 에 접속합니다. Supabase 환경 변수가 없으면 내장 샘플 데이터로 동작합니다.
+## 사용하는 Supabase 테이블
 
-## Supabase 연결
+이 앱은 테이블을 만들지 않고, 이미 있는 테이블을 읽기만 합니다.
 
-1. Supabase에서 프로젝트를 만듭니다.
-2. SQL Editor에서 `supabase/migrations/0001_ai_employees.sql`을 실행합니다.
-   - `ai_employees` 테이블 생성, 읽기 전용 RLS 정책, Realtime 등록, 샘플 직원 5명 시드
-3. `.env.example`을 `.env.local`로 복사하고 값을 채웁니다.
-
-```bash
-cp .env.example .env.local
-```
-
-| 변수 | 설명 |
+| 테이블 | 사용하는 컬럼 |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | 프로젝트 URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon (public) key |
+| `agents` | `id`, `name` (위 5개 이름과 정확히 같아야 매칭됨) |
+| `tasks` | `id`, `agent_id`, `status`, `title`, `created_at`, `updated_at` |
+| `task_steps` | `id`, `task_id`, `name`, `status`, `created_at` (생성 순으로 정렬) |
+| `outputs` | `id`, `task_id`, `type`, `content`, `url`, `created_at` |
 
-Supabase 대시보드에서 직원의 `status`를 `working`, `idle`, `offline`, `error` 중 하나로 바꾸거나 `current_task`를 수정하면 현황판에 바로 반영됩니다.
+- anon key로 읽으므로 각 테이블에 `select` RLS 정책이 필요합니다.
+- 자동 갱신을 원하면 테이블을 `supabase_realtime` publication에 추가하세요.
+- 조회에 실패하면 화면 상단에 오류 메시지를 표시합니다.
+
+## 상태 값
+
+`tasks.status`는 DB 값을 그대로 표시합니다. 값에 따라 색상과 집계만 달라집니다.
+
+| 집계 | 상태 값 |
+| --- | --- |
+| 전체 | 5명 직원의 모든 작업 |
+| 작업 중 | `analyzing`, `topic`, `research`, `writing`, `pop`, `review` |
+| 완료 | `done` |
+| 대기 중 | `queued` |
+| 오류 | `error` |
+
+`canceled`는 전체에만 포함됩니다. 카드의 상태는 해당 직원의 가장 최근 작업(`created_at` 기준) 상태입니다.
 
 ## 구조
 
 ```
 app/
-  layout.tsx          # ThemeProvider, 전역 스타일
-  page.tsx            # 서버에서 직원 목록 조회
-components/
-  staff-board.tsx     # 상태 요약 + 카드 그리드 + Realtime 구독
-  employee-card.tsx   # AI 직원 카드
-  theme-toggle.tsx    # 라이트/다크/시스템 전환
+  page.tsx               # 현황판
+  agents/[slug]/page.tsx # 직원 상세 (작업, 단계, 결과물)
+components/              # 카드, 집계, 상태 배지, Realtime, 테마
 lib/
-  supabase.ts         # Supabase 클라이언트
-  employees.ts        # 데이터 조회 (실패 시 샘플 데이터)
-  mock-data.ts        # 샘플 직원 5명
-  status.ts           # 상태별 라벨, 색상
-supabase/migrations/  # 테이블 스키마 + 시드
+  agents.ts              # 고정 직원 5명
+  data.ts                # Supabase 조회
+  status.ts              # 상태 분류, 색상
+  supabase.ts            # Supabase 클라이언트
 ```
