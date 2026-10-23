@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { getSupabase } from "@/lib/supabase";
+import { getBrowserClient } from "@/lib/supabase/client";
 
 const TABLES = ["agents", "tasks", "task_steps", "outputs"];
 
@@ -11,7 +11,7 @@ export function RealtimeRefresh() {
   const router = useRouter();
 
   useEffect(() => {
-    const supabase = getSupabase();
+    const supabase = getBrowserClient();
     if (!supabase) return;
 
     let timer: ReturnType<typeof setTimeout> | undefined;

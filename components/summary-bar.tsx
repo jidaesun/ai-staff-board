@@ -10,7 +10,7 @@ const ITEMS: { key: keyof Summary; label: string; dot: string }[] = [
 
 export function SummaryBar({ summary }: { summary: Summary }) {
   return (
-    <section aria-label="작업 집계" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <section aria-label="작업 집계" className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       {ITEMS.map(({ key, label, dot }) => (
         <div
           key={key}

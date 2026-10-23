@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ErrorNotice } from "@/components/error-notice";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { StatusBadge } from "@/components/status-badge";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppHeader } from "@/components/app-header";
+import { requireUser } from "@/lib/auth";
 import { getAgentDetail } from "@/lib/data";
 import { formatDateTime, statusDotClass } from "@/lib/status";
 import { taskTitle, type OutputRow, type TaskRow } from "@/lib/types";
@@ -30,6 +31,7 @@ export default async function AgentPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ task?: string }>;
 }) {
+  const user = await requireUser();
   const { id } = await params;
   const { task: taskId } = await searchParams;
   const agentId = safeDecode(id);
@@ -40,18 +42,9 @@ export default async function AgentPage({
   const finalCount = outputs.filter((o) => o.kind === "final").length;
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RealtimeRefresh />
-      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
-            ← 현황판
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{agent?.name ?? agentId}</h1>
-          {agent?.specialty && <p className={`mt-1 ${muted}`}>{agent.specialty}</p>}
-        </div>
-        <ThemeToggle />
-      </header>
+      <AppHeader back title={agent?.name ?? agentId} subtitle={agent?.specialty} email={user.email} />
 
       {error && (
         <div className="mb-6">
@@ -60,7 +53,7 @@ export default async function AgentPage({
       )}
 
       {agent && (
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="grid gap-6 md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr]">
           <aside className={`${panel} h-fit`}>
             <h2 className={panelTitle}>작업 목록 ({tasks.length})</h2>
             {tasks.length === 0 ? (
@@ -170,11 +163,11 @@ function TaskSummary({ task }: { task: TaskRow }) {
       {task.topic && task.instruction && (
         <p className="mt-2 text-sm whitespace-pre-wrap text-slate-600 dark:text-slate-300">{task.instruction}</p>
       )}
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:grid-cols-4">
         {fields.map(([label, value]) => (
           <div key={label} className="min-w-0">
             <dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt>
-            <dd className="truncate text-slate-900 dark:text-slate-50">{value}</dd>
+            <dd className="break-words text-slate-900 dark:text-slate-50">{value}</dd>
           </div>
         ))}
       </dl>

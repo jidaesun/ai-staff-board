@@ -1,5 +1,5 @@
 import { IN_PROGRESS_STATUSES } from "./status";
-import { getSupabase } from "./supabase";
+import { createClient } from "./supabase/server";
 import type { AgentRow, OutputRow, TaskRow, TaskStepRow } from "./types";
 
 export interface Summary {
@@ -64,7 +64,7 @@ export function summarize(tasks: Pick<TaskRow, "status">[]): Summary {
 
 export async function getBoard(): Promise<BoardData> {
   const empty: BoardData = { cards: [], summary: summarize([]), error: null };
-  const supabase = getSupabase();
+  const supabase = await createClient();
   if (!supabase) return { ...empty, error: NOT_CONFIGURED };
 
   const [agentRes, taskRes] = await Promise.all([
@@ -133,7 +133,7 @@ export interface AgentDetail {
 
 export async function getAgentDetail(agentId: string, taskId?: string): Promise<AgentDetail> {
   const empty: AgentDetail = { agent: null, tasks: [], selectedTask: null, steps: [], outputs: [], error: null };
-  const supabase = getSupabase();
+  const supabase = await createClient();
   if (!supabase) return { ...empty, error: NOT_CONFIGURED };
 
   const agentRes = await supabase.from("agents").select(AGENT_COLUMNS).eq("id", agentId).maybeSingle();
