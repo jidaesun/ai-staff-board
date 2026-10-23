@@ -20,13 +20,14 @@ const dot = {
 
 function toneOf(status: string | null | undefined): keyof typeof tone {
   if (status === "queued") return "queued";
+  if (status === "running") return "active"; // task_steps.status
   if (status === "done") return "done";
   if (status === "error") return "error";
   if (IN_PROGRESS_STATUSES.includes(status as TaskStatus)) return "active";
   return "neutral";
 }
 
-// 색상만 상태에 따라 정하고, 표시하는 글자는 DB 값 그대로 씁니다.
+// tasks.status 와 task_steps.status 공용. 색상만 상태에 따라 정하고, 글자는 DB 값 그대로 씁니다.
 export const statusBadgeClass = (status: string | null | undefined) => tone[toneOf(status)];
 export const statusDotClass = (status: string | null | undefined) => dot[toneOf(status)];
 

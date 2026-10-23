@@ -1,7 +1,6 @@
-import { FIXED_AGENTS, type FixedAgent } from "./agents";
 import { IN_PROGRESS_STATUSES } from "./status";
 import { getSupabase } from "./supabase";
-import type { AgentRow, OutputRow, TaskRow, TaskStatus, TaskStepRow } from "./types";
+import type { AgentRow, OutputRow, TaskRow, TaskStepRow } from "./types";
 
 export interface Summary {
   total: number;
@@ -12,10 +11,10 @@ export interface Summary {
 }
 
 export interface AgentCardData {
-  def: FixedAgent;
-  agent: AgentRow | null;
-  latestTask: TaskRow | null;
+  agent: AgentRow;
+  latestTask: BoardTask | null;
   taskCount: number;
+  finalOutputCount: number;
 }
 
 export interface BoardData {
@@ -26,60 +25,98 @@ export interface BoardData {
 
 const NOT_CONFIGURED = "Supabase가 설정되지 않았습니다. .env.local에 URL과 anon key를 입력하세요.";
 
+const AGENT_COLUMNS = "id, name, specialty, sort";
+const BOARD_TASK_COLUMNS =
+  "id, agent_id, topic, instruction, status, current_step, started_at, error_message, created_at";
+
+export type BoardTask = Pick<
+  TaskRow,
+  "id" | "agent_id" | "topic" | "instruction" | "status" | "current_step" | "started_at" | "error_message" | "created_at"
+>;
+
+// PostgREST 의 in() 필터가 URL 길이 제한에 걸리지 않도록 나눠서 조회
+const IN_CHUNK = 200;
+// Supabase 기본 max rows(1000)보다 작게 잡아 페이지 단위로 끝까지 읽음
+const PAGE_SIZE = 1000;
+
+type PageResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+
+async function fetchAll<T>(page: (from: number, to: number) => PageResult<T>): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message };
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) return { rows, error: null };
+  }
+}
+
 export function summarize(tasks: Pick<TaskRow, "status">[]): Summary {
   const count = (pred: (s: string) => boolean) => tasks.filter((t) => pred(t.status)).length;
   return {
     total: tasks.length,
-    inProgress: count((s) => IN_PROGRESS_STATUSES.includes(s as TaskStatus)),
+    inProgress: count((s) => IN_PROGRESS_STATUSES.includes(s as TaskRow["status"])),
     done: count((s) => s === "done"),
     queued: count((s) => s === "queued"),
     error: count((s) => s === "error"),
   };
 }
 
-const emptyCards = (): AgentCardData[] =>
-  FIXED_AGENTS.map((def) => ({ def, agent: null, latestTask: null, taskCount: 0 }));
-
-async function getFixedAgentRows(): Promise<{ rows: AgentRow[]; error: string | null }> {
-  const supabase = getSupabase();
-  if (!supabase) return { rows: [], error: NOT_CONFIGURED };
-  const { data, error } = await supabase
-    .from("agents")
-    .select("*")
-    .in(
-      "name",
-      FIXED_AGENTS.map((a) => a.name),
-    );
-  if (error) return { rows: [], error: `agents 조회 실패: ${error.message}` };
-  return { rows: data as AgentRow[], error: null };
-}
-
 export async function getBoard(): Promise<BoardData> {
+  const empty: BoardData = { cards: [], summary: summarize([]), error: null };
   const supabase = getSupabase();
-  const { rows: agents, error: agentError } = await getFixedAgentRows();
-  if (!supabase || agentError) {
-    return { cards: emptyCards(), summary: summarize([]), error: agentError };
-  }
+  if (!supabase) return { ...empty, error: NOT_CONFIGURED };
 
-  let tasks: TaskRow[] = [];
+  const [agentRes, taskRes] = await Promise.all([
+    supabase.from("agents").select(AGENT_COLUMNS).order("sort", { ascending: true }),
+    fetchAll<BoardTask>((from, to) =>
+      supabase
+        .from("tasks")
+        .select(BOARD_TASK_COLUMNS)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+  ]);
+  if (agentRes.error) return { ...empty, error: `agents 조회 실패: ${agentRes.error.message}` };
+  if (taskRes.error) return { ...empty, error: `tasks 조회 실패: ${taskRes.error}` };
+
+  const agents = agentRes.data as AgentRow[];
+  const agentIds = new Set(agents.map((a) => a.id));
+  const tasks = taskRes.rows.filter((t) => agentIds.has(t.agent_id));
+
+  // 최종 결과물(kind='final') 수를 작업 → 직원 순으로 집계
+  const finalByTask = new Map<string, number>();
   let error: string | null = null;
-  if (agents.length > 0) {
-    const res = await supabase
-      .from("tasks")
-      .select("*")
-      .in(
-        "agent_id",
-        agents.map((a) => a.id),
-      )
-      .order("created_at", { ascending: false });
-    if (res.error) error = `tasks 조회 실패: ${res.error.message}`;
-    else tasks = res.data as TaskRow[];
+  const taskIds = tasks.map((t) => t.id);
+  for (let i = 0; i < taskIds.length; i += IN_CHUNK) {
+    const chunk = taskIds.slice(i, i + IN_CHUNK);
+    const res = await fetchAll<Pick<OutputRow, "task_id">>((from, to) =>
+      supabase
+        .from("outputs")
+        .select("task_id")
+        .eq("kind", "final")
+        .in("task_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    if (res.error) {
+      error = `outputs 조회 실패: ${res.error}`;
+      break;
+    }
+    for (const row of res.rows) {
+      finalByTask.set(row.task_id, (finalByTask.get(row.task_id) ?? 0) + 1);
+    }
   }
 
-  const cards = FIXED_AGENTS.map((def) => {
-    const agent = agents.find((a) => a.name === def.name) ?? null;
-    const own = agent ? tasks.filter((t) => t.agent_id === agent.id) : [];
-    return { def, agent, latestTask: own[0] ?? null, taskCount: own.length };
+  const cards = agents.map((agent) => {
+    const own = tasks.filter((t) => t.agent_id === agent.id);
+    return {
+      agent,
+      latestTask: own[0] ?? null,
+      taskCount: own.length,
+      finalOutputCount: own.reduce((sum, t) => sum + (finalByTask.get(t.id) ?? 0), 0),
+    };
   });
 
   return { cards, summary: summarize(tasks), error };
@@ -94,13 +131,14 @@ export interface AgentDetail {
   error: string | null;
 }
 
-export async function getAgentDetail(def: FixedAgent, taskId?: string): Promise<AgentDetail> {
+export async function getAgentDetail(agentId: string, taskId?: string): Promise<AgentDetail> {
   const empty: AgentDetail = { agent: null, tasks: [], selectedTask: null, steps: [], outputs: [], error: null };
   const supabase = getSupabase();
-  const { rows, error: agentError } = await getFixedAgentRows();
-  if (!supabase || agentError) return { ...empty, error: agentError };
+  if (!supabase) return { ...empty, error: NOT_CONFIGURED };
 
-  const agent = rows.find((a) => a.name === def.name) ?? null;
+  const agentRes = await supabase.from("agents").select(AGENT_COLUMNS).eq("id", agentId).maybeSingle();
+  if (agentRes.error) return { ...empty, error: `agents 조회 실패: ${agentRes.error.message}` };
+  const agent = agentRes.data as AgentRow | null;
   if (!agent) return empty;
 
   const taskRes = await supabase
@@ -116,7 +154,7 @@ export async function getAgentDetail(def: FixedAgent, taskId?: string): Promise<
   if (!selectedTask) return { ...empty, agent, tasks };
 
   const [stepRes, outputRes] = await Promise.all([
-    supabase.from("task_steps").select("*").eq("task_id", selectedTask.id).order("created_at", { ascending: true }),
+    supabase.from("task_steps").select("*").eq("task_id", selectedTask.id).order("position", { ascending: true }),
     supabase.from("outputs").select("*").eq("task_id", selectedTask.id).order("created_at", { ascending: true }),
   ]);
 

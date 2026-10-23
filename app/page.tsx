@@ -29,12 +29,16 @@ export default async function Home() {
 
       <SummaryBar summary={summary} />
 
+      {!error && cards.length === 0 && (
+        <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">agents 테이블에 행이 없습니다.</p>
+      )}
+
       <section
         aria-label="AI 직원 목록"
         className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
       >
         {cards.map((card) => (
-          <AgentCard key={card.def.slug} data={card} />
+          <AgentCard key={card.agent.id} data={card} />
         ))}
       </section>
     </main>
