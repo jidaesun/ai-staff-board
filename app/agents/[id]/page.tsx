@@ -7,7 +7,7 @@ import { AppHeader } from "@/components/app-header";
 import { CopyButton } from "@/components/copy-button";
 import { InstructionForm } from "@/components/instruction-form";
 import { TaskRunner } from "@/components/task-runner";
-import { BLOG_AGENT_NAME } from "@/lib/blog/config";
+import { BLOG_AGENT_ID } from "@/lib/blog/config";
 import { requireUser } from "@/lib/auth";
 import { getAgentDetail } from "@/lib/data";
 import { formatDateTime, statusDotClass } from "@/lib/status";
@@ -56,7 +56,7 @@ export default async function AgentPage({
         </div>
       )}
 
-      {agent?.name === BLOG_AGENT_NAME && (
+      {agent && agent.id === BLOG_AGENT_ID && (
         <div className="mb-6">
           <InstructionForm agentId={agent.id} agentName={agent.name} />
         </div>

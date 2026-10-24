@@ -31,12 +31,22 @@ npm run dev
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 화면, 서버 |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 화면(로그인, 읽기) |
-| `SUPABASE_SERVICE_ROLE_KEY` | 서버 API 라우트에서만 (DB 쓰기). 브라우저로 보내지 않음 |
+| `SUPABASE_SERVICE_ROLE_KEY` | 서버 API 라우트에서만 (DB 쓰기). 브라우저로 보내지 않음. secret 키(`sb_secret_…`) 또는 기존 `service_role` JWT |
 | `ANTHROPIC_API_KEY` | 서버 API 라우트에서만 (Claude 호출) |
+
+### 서버 설정 점검
+
+업무 지시 입력창의 **서버 설정 점검**(또는 로그인 상태에서 `GET /api/health`)으로 아래를 확인합니다. 키 값은 출력하지 않고 종류만 보여 줍니다.
+
+- `SUPABASE_SERVICE_ROLE_KEY`: 없음, 빈 값, `sb_secret_`(정상), `service_role` JWT(정상), `sb_publishable_`·`anon` JWT(잘못 넣은 키), 앞뒤 공백·따옴표 제거 여부
+- `@supabase/supabase-js` 버전과 `sb_secret_` 키 지원 여부 (2.118.0에서 확인)
+- service role 키로 `agents.id='large'` 조회 결과: 찾음, 0행, Supabase 오류
+
+업무 지시가 실패하면 원인을 구분해 보여 줍니다: 서버 설정 문제(키 없음, 잘못된 키 종류), Supabase 오류(Supabase가 돌려준 메시지), 행 없음(조회는 성공했지만 0행). 오류 메시지에 키 값이 섞여 있으면 가립니다.
 
 ## 블로그 작성 (대형가전 AI)
 
-현황판이나 대형가전 AI 상세 화면의 업무 지시 입력창에 지시를 넣으면 작업이 만들어지고 아래 단계를 차례로 실행합니다.
+블로그 작성 직원은 `agents.id = 'large'` 행입니다 (`lib/blog/config.ts`의 `BLOG_AGENT_ID`). 현황판이나 이 직원의 상세 화면에 있는 업무 지시 입력창에 지시를 넣으면 작업이 만들어지고 아래 단계를 차례로 실행합니다.
 
 | 순서 | `task_steps.step_key` | `label` | 실행 중 `tasks.status` | 하는 일 |
 | --- | --- | --- | --- | --- |

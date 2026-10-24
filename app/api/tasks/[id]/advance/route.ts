@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { advanceTask } from "@/lib/blog/pipeline";
-import { getAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient, redactSecrets } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 // 한 번 호출에 한 단계(모델 호출 최대 1회)만 실행
@@ -15,7 +15,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(await advanceTask(id));
   } catch (error) {
     // 단계 밖에서 난 오류도 이 작업에만 기록 (이미 끝난 작업은 건드리지 않음)
-    const message = error instanceof Error ? error.message : String(error);
+    const message = redactSecrets(error instanceof Error ? error.message : String(error));
     try {
       await getAdminClient()
         .from("tasks")
