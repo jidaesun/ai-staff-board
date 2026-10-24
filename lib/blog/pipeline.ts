@@ -5,6 +5,7 @@ import type { OutputRow, TaskRow, TaskStatus, TaskStepRow } from "@/lib/types";
 import { generateText } from "./claude";
 import { ANALYZE_SYSTEM, RESEARCH_SYSTEM, TOPIC_SYSTEM, WRITE_SYSTEM, rewritePrompt, writePrompt } from "./prompts";
 import { checkBlog } from "./rules";
+import { checkStyle } from "./style";
 
 interface StepDef {
   key: string;
@@ -177,15 +178,33 @@ async function runStep(db: SupabaseClient, key: string, task: TaskRow, prev: Tas
     }
 
     case "review":
-      return reviewDraft(db, task);
+      return reviewDraft(db, task, summaryOf("research"));
 
     default:
       throw new StepError(`알 수 없는 단계: ${key}`);
   }
 }
 
-// 초안을 규칙으로 검사하고, 어긋나면 한 번만 다시 쓰게 한 뒤 다시 검사
-async function reviewDraft(db: SupabaseClient, task: TaskRow): Promise<string> {
+// 초안 검사 결과
+// - blocking: 매장명·글자 수·해시태그 규칙, 확인되지 않은 가격·모델명. 다시 써도 남으면 오류
+// - style: 딱딱한 말투, 풀이 없는 어려운 말, 소제목·문단·첫 문단. 다시 써도 남으면 경고로 기록
+function inspectDraft(text: string, research: string) {
+  const rules = checkBlog(text);
+  const style = checkStyle(rules.body, research);
+  return {
+    bodyChars: rules.bodyChars,
+    hashtags: rules.hashtags.length,
+    blocking: [...rules.violations, ...style.factIssues],
+    style: style.styleIssues,
+  };
+}
+
+const passLine = (v: number, r: ReturnType<typeof inspectDraft>) =>
+  `v${v} 검토 통과 (본문 ${r.bodyChars.toLocaleString("ko-KR")}자, 해시태그 ${r.hashtags}개)`;
+const issueLines = (label: string, issues: string[]) => issues.map((i) => `${label} ${i}`);
+
+// 초안을 검사하고, 어긋난 점이 있으면 한 번만 다시 쓰게 한 뒤 다시 검사
+async function reviewDraft(db: SupabaseClient, task: TaskRow, research: string): Promise<string> {
   const drafts = await many<OutputRow>(
     db
       .from("outputs")
@@ -201,28 +220,34 @@ async function reviewDraft(db: SupabaseClient, task: TaskRow): Promise<string> {
   if (!draft?.content) throw new StepError("검토할 초안이 없습니다.");
 
   const version = draft.version ?? 1;
-  const first = checkBlog(draft.content);
-  if (first.ok) {
+  const first = inspectDraft(draft.content, research);
+  if (first.blocking.length === 0 && first.style.length === 0) {
     await saveOutput(db, task.id, "final", draft.content, version);
-    return `v${version} 규칙 검증 통과 (본문 ${first.bodyChars.toLocaleString("ko-KR")}자, 해시태그 ${first.hashtags.length}개)`;
+    return passLine(version, first);
   }
 
-  const log = [`v${version} 규칙 위반: ${first.violations.join(" / ")}`];
+  const log = [
+    `v${version} 검토: 다시 쓰기 요청`,
+    ...issueLines("[규칙]", first.blocking),
+    ...issueLines("[말투·용어·구성]", first.style),
+  ];
   const rewritten = await generateText({
     system: WRITE_SYSTEM,
-    prompt: rewritePrompt(draft.content, first.violations),
+    prompt: rewritePrompt(draft.content, [...first.blocking, ...first.style], research),
     effort: "medium",
     maxTokens: 16000,
   });
-  await saveOutput(db, task.id, "intermediate", rewritten, version + 1);
+  const next = version + 1;
+  await saveOutput(db, task.id, "intermediate", rewritten, next);
 
-  const second = checkBlog(rewritten);
-  if (!second.ok) {
-    log.push(`재작성 v${version + 1}도 규칙 위반: ${second.violations.join(" / ")}`);
+  const second = inspectDraft(rewritten, research);
+  if (second.blocking.length > 0) {
+    log.push(`재작성 v${next}도 규칙 위반`, ...issueLines("[규칙]", second.blocking));
     throw new StepError(log.join("\n"));
   }
-  await saveOutput(db, task.id, "final", rewritten, version + 1);
-  log.push(`재작성 v${version + 1} 규칙 검증 통과 (본문 ${second.bodyChars.toLocaleString("ko-KR")}자, 해시태그 ${second.hashtags.length}개)`);
+  await saveOutput(db, task.id, "final", rewritten, next);
+  log.push(passLine(next, second));
+  if (second.style.length > 0) log.push(`v${next}에 남은 경고`, ...issueLines("[말투·용어·구성]", second.style));
   return log.join("\n");
 }
 

@@ -8,6 +8,8 @@ export interface BlogCheck {
   violations: string[];
   bodyChars: number;
   hashtags: string[];
+  // 제목 줄과 해시태그 줄을 뺀 본문
+  body: string;
 }
 
 const HASHTAG = /(^|\s)#[^\s#]+/;
@@ -67,5 +69,5 @@ export function checkBlog(text: string): BlogCheck {
     if (m) violations.push(`매장명 변형 표기가 있습니다: "${m[0]}". "${STORE_NAME}"로 통일해 주세요.`);
   }
 
-  return { ok: violations.length === 0, violations: [...new Set(violations)], bodyChars, hashtags };
+  return { ok: violations.length === 0, violations: [...new Set(violations)], bodyChars, hashtags, body };
 }
