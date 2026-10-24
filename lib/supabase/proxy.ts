@@ -8,6 +8,8 @@ const LOGIN_PATH = "/login";
 export async function updateSession(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isLoginPage = pathname === LOGIN_PATH;
+  // API 라우트는 리다이렉트하지 않고 각 라우트가 401 을 돌려줌
+  const isApi = pathname.startsWith("/api/");
 
   const redirectTo = (path: string, next?: string) => {
     const url = request.nextUrl.clone();
@@ -17,7 +19,7 @@ export async function updateSession(request: NextRequest) {
   };
 
   if (!isSupabaseConfigured) {
-    return isLoginPage ? NextResponse.next() : NextResponse.redirect(redirectTo(LOGIN_PATH));
+    return isLoginPage || isApi ? NextResponse.next() : NextResponse.redirect(redirectTo(LOGIN_PATH));
   }
 
   let response = NextResponse.next({ request });
@@ -36,7 +38,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isApi) {
     return withCookies(NextResponse.redirect(redirectTo(LOGIN_PATH, pathname + search)), response);
   }
   if (user && isLoginPage) {

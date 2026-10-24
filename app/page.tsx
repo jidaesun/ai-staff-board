@@ -3,6 +3,8 @@ import { ErrorNotice } from "@/components/error-notice";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SummaryBar } from "@/components/summary-bar";
 import { AppHeader } from "@/components/app-header";
+import { InstructionForm } from "@/components/instruction-form";
+import { BLOG_AGENT_NAME } from "@/lib/blog/config";
 import { requireUser } from "@/lib/auth";
 import { getBoard } from "@/lib/data";
 
@@ -11,6 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await requireUser();
   const { cards, summary, error } = await getBoard();
+  const blogAgent = cards.find((c) => c.agent.name === BLOG_AGENT_NAME)?.agent;
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -20,6 +23,12 @@ export default async function Home() {
       {error && (
         <div className="mb-6">
           <ErrorNotice message={error} />
+        </div>
+      )}
+
+      {blogAgent && (
+        <div className="mb-6">
+          <InstructionForm agentId={blogAgent.id} agentName={blogAgent.name} />
         </div>
       )}
 

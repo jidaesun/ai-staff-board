@@ -4,6 +4,10 @@ import { ErrorNotice } from "@/components/error-notice";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { StatusBadge } from "@/components/status-badge";
 import { AppHeader } from "@/components/app-header";
+import { CopyButton } from "@/components/copy-button";
+import { InstructionForm } from "@/components/instruction-form";
+import { TaskRunner } from "@/components/task-runner";
+import { BLOG_AGENT_NAME } from "@/lib/blog/config";
 import { requireUser } from "@/lib/auth";
 import { getAgentDetail } from "@/lib/data";
 import { formatDateTime, statusDotClass } from "@/lib/status";
@@ -29,11 +33,11 @@ export default async function AgentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ task?: string }>;
+  searchParams: Promise<{ task?: string; run?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const { task: taskId } = await searchParams;
+  const { task: taskId, run } = await searchParams;
   const agentId = safeDecode(id);
 
   const { agent, tasks, selectedTask, steps, outputs, error } = await getAgentDetail(agentId, taskId);
@@ -49,6 +53,12 @@ export default async function AgentPage({
       {error && (
         <div className="mb-6">
           <ErrorNotice message={error} />
+        </div>
+      )}
+
+      {agent?.name === BLOG_AGENT_NAME && (
+        <div className="mb-6">
+          <InstructionForm agentId={agent.id} agentName={agent.name} />
         </div>
       )}
 
@@ -86,7 +96,7 @@ export default async function AgentPage({
 
           {selectedTask && (
             <div className="min-w-0 space-y-6">
-              <TaskSummary task={selectedTask} />
+              <TaskSummary task={selectedTask} autoRun={run === "1" && selectedTask.id === taskId} />
 
               <section className={panel} aria-labelledby="steps-title">
                 <h2 id="steps-title" className={panelTitle}>
@@ -142,7 +152,9 @@ export default async function AgentPage({
   );
 }
 
-function TaskSummary({ task }: { task: TaskRow }) {
+const TERMINAL = ["done", "error", "canceled"];
+
+function TaskSummary({ task, autoRun }: { task: TaskRow; autoRun: boolean }) {
   const fields: [string, string][] = [
     ["kind", task.kind ?? "-"],
     ["current_step", task.current_step ?? "-"],
@@ -176,6 +188,9 @@ function TaskSummary({ task }: { task: TaskRow }) {
           <ErrorNotice message={task.error_message} />
         </div>
       )}
+      {task.kind === "blog" && !TERMINAL.includes(task.status) && (
+        <TaskRunner key={task.id} taskId={task.id} autoStart={autoRun} />
+      )}
     </section>
   );
 }
@@ -194,7 +209,10 @@ function OutputItem({ output }: { output: OutputRow }) {
           {output.format && <span>· {output.format}</span>}
           {output.version != null && <span>· v{output.version}</span>}
         </span>
-        <span>{formatDateTime(output.created_at)}</span>
+        <span className="flex items-center gap-2">
+          {formatDateTime(output.created_at)}
+          {isFinal && output.content && <CopyButton text={output.content} />}
+        </span>
       </div>
       {output.file_path && (
         <p className="mt-2 font-mono text-xs break-all text-slate-500 dark:text-slate-400">{output.file_path}</p>
