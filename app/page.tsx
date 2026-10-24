@@ -4,7 +4,7 @@ import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SummaryBar } from "@/components/summary-bar";
 import { AppHeader } from "@/components/app-header";
 import { InstructionForm } from "@/components/instruction-form";
-import { BLOG_AGENT_NAME } from "@/lib/blog/config";
+import { BLOG_AGENT_ID } from "@/lib/blog/config";
 import { requireUser } from "@/lib/auth";
 import { getBoard } from "@/lib/data";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await requireUser();
   const { cards, summary, error } = await getBoard();
-  const blogAgent = cards.find((c) => c.agent.name === BLOG_AGENT_NAME)?.agent;
+  const blogAgent = cards.find((c) => c.agent.id === BLOG_AGENT_ID)?.agent;
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -26,10 +26,18 @@ export default async function Home() {
         </div>
       )}
 
-      {blogAgent && (
+      {blogAgent ? (
         <div className="mb-6">
           <InstructionForm agentId={blogAgent.id} agentName={blogAgent.name} />
         </div>
+      ) : (
+        !error && (
+          <div className="mb-6">
+            <ErrorNotice
+              message={`업무 지시를 할 수 없습니다: agents 테이블에서 id='${BLOG_AGENT_ID}' 행을 읽지 못했습니다 (조회는 성공, 0행). 로그인 사용자로 읽는 화면이므로 행이 있다면 agents 의 select RLS 정책을 확인하세요.`}
+            />
+          </div>
+        )
       )}
 
       <SummaryBar summary={summary} />

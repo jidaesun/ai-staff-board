@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient, redactSecrets } from "@/lib/supabase/admin";
 import type { OutputRow, TaskRow, TaskStatus, TaskStepRow } from "@/lib/types";
 import { generateText } from "./claude";
 import { ANALYZE_SYSTEM, RESEARCH_SYSTEM, TOPIC_SYSTEM, WRITE_SYSTEM, rewritePrompt, writePrompt } from "./prompts";
@@ -124,7 +124,8 @@ export async function advanceTask(taskId: string): Promise<AdvanceResult> {
 }
 
 // 오류는 이 작업과 단계에만 기록
-async function failStep(db: SupabaseClient, task: TaskRow, stepId: string, message: string) {
+async function failStep(db: SupabaseClient, task: TaskRow, stepId: string, raw: string) {
+  const message = redactSecrets(raw);
   const at = now();
   await db.from("task_steps").update({ status: "error", finished_at: at, summary: message }).eq("id", stepId);
   await db.from("tasks").update({ status: "error", error_message: message, finished_at: at }).eq("id", task.id);
