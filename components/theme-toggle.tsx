@@ -18,7 +18,7 @@ export function ThemeToggle() {
     <div
       role="radiogroup"
       aria-label="테마 선택"
-      className="inline-flex self-start rounded-full border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+      className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900"
     >
       {OPTIONS.map((opt) => {
         const active = mounted && theme === opt.value;

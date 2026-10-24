@@ -1,41 +1,45 @@
-import type { EmployeeStatus } from "./types";
+import type { TaskStatus } from "./types";
 
-export const STATUS_META: Record<
-  EmployeeStatus,
-  { label: string; dot: string; badge: string; bar: string }
-> = {
-  working: {
-    label: "업무 중",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/30",
-    bar: "bg-emerald-500",
-  },
-  idle: {
-    label: "대기",
-    dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/30",
-    bar: "bg-amber-500",
-  },
-  error: {
-    label: "오류",
-    dot: "bg-rose-500",
-    badge: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/30",
-    bar: "bg-rose-500",
-  },
-  offline: {
-    label: "오프라인",
-    dot: "bg-slate-400",
-    badge: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-400/30",
-    bar: "bg-slate-400",
-  },
+export const IN_PROGRESS_STATUSES: TaskStatus[] = ["analyzing", "topic", "research", "writing", "pop", "review"];
+
+const tone = {
+  queued: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/30",
+  active: "bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-400/30",
+  done: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/30",
+  error: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/30",
+  neutral: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-400/30",
 };
 
-export const STATUS_ORDER: EmployeeStatus[] = ["working", "idle", "error", "offline"];
+const dot = {
+  queued: "bg-amber-500",
+  active: "bg-sky-500",
+  done: "bg-emerald-500",
+  error: "bg-rose-500",
+  neutral: "bg-slate-400",
+};
 
-export function formatRelative(iso: string, now = Date.now()): string {
-  const diff = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (diff < 60) return "방금 전";
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
+function toneOf(status: string | null | undefined): keyof typeof tone {
+  if (status === "queued") return "queued";
+  if (status === "running") return "active"; // task_steps.status
+  if (status === "done") return "done";
+  if (status === "error") return "error";
+  if (IN_PROGRESS_STATUSES.includes(status as TaskStatus)) return "active";
+  return "neutral";
+}
+
+// tasks.status 와 task_steps.status 공용. 색상만 상태에 따라 정하고, 글자는 DB 값 그대로 씁니다.
+export const statusBadgeClass = (status: string | null | undefined) => tone[toneOf(status)];
+export const statusDotClass = (status: string | null | undefined) => dot[toneOf(status)];
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
